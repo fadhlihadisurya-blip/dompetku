@@ -3,7 +3,10 @@ import {
   User, 
   onAuthStateChanged, 
   signInWithPopup, 
-  signOut 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
 
@@ -13,6 +16,9 @@ interface AuthContextType {
   signingIn: boolean;
   error: string | null;
   signIn: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,10 +52,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (err.code === 'auth/cancelled-popup-request') {
         // Ignored, user just closed it
       } else {
-        setError("Gagal masuk. Silakan coba lagi.");
+        setError("Gagal masuk dengan Google. Silakan coba lagi.");
       }
     } finally {
       setSigningIn(false);
+    }
+  };
+
+  const signInWithEmail = async (email: string, pass: string) => {
+    setSigningIn(true);
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (err: any) {
+      console.error("Email sign in error:", err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError("Email atau password salah.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError("Format email tidak valid.");
+      } else {
+        setError("Gagal masuk. Silakan coba lagi.");
+      }
+      throw err;
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string) => {
+    setSigningIn(true);
+    setError(null);
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+    } catch (err: any) {
+      console.error("Email sign up error:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Email sudah terdaftar.");
+      } else if (err.code === 'auth/weak-password') {
+        setError("Password terlalu lemah.");
+      } else {
+        setError("Gagal mendaftar. Silakan coba lagi.");
+      }
+      throw err;
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    setError(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (err: any) {
+      console.error("Password reset error:", err);
+      setError("Gagal mengirim email reset password.");
+      throw err;
     }
   };
 
@@ -62,7 +119,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signingIn, error, signIn, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signingIn, 
+      error, 
+      signIn, 
+      signInWithEmail, 
+      signUpWithEmail, 
+      resetPassword, 
+      logout 
+    }}>
       {!loading && children}
     </AuthContext.Provider>
   );
