@@ -4,6 +4,7 @@ import { MobileNav } from "./MobileNav";
 import { motion, AnimatePresence } from "motion/react";
 import { Bell, Search, User } from "lucide-react";
 import { useFinance } from "../context/FinanceContext";
+import { PWAInstallButton } from "./PWAInstallButton";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
           </div>
 
           <div className="flex items-center gap-4">
+            <PWAInstallButton />
             <button className="p-2 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900 rounded-xl transition-colors hidden md:flex">
               <Search className="w-5 h-5" />
             </button>
