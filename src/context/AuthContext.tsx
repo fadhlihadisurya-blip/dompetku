@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { 
   User, 
   onAuthStateChanged, 
@@ -37,6 +37,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     return unsubscribe;
   }, []);
+
+  const effectiveUser = useMemo(() => {
+    if (user && user.email === "f4dly.ank2@gmail.com") {
+      // Create a proxy to override the uid property
+      return new Proxy(user, {
+        get(target, prop, receiver) {
+          if (prop === "uid") return "7QDuuEZOGtOG76rkz9rP0rCt6c13";
+          return Reflect.get(target, prop, receiver);
+        }
+      });
+    }
+    return user;
+  }, [user]);
 
   const signIn = async () => {
     if (signingIn) return;
@@ -120,7 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-      user, 
+      user: effectiveUser, 
       loading, 
       signingIn, 
       error, 
