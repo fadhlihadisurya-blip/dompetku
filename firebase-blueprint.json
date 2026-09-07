@@ -1,0 +1,100 @@
+{
+  "collections": {
+    "transactions": {
+      "fields": {
+        "userId": "string",
+        "type": "string",
+        "amount": "number",
+        "category": "string",
+        "description": "string",
+        "date": "string",
+        "time": "string?",
+        "createdAt": "string?",
+        "updatedAt": "string?",
+        "paymentMethod": "string",
+        "notes": "string?"
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "field": "userId", "order": "ASCENDING" },
+            { "field": "date", "order": "DESCENDING" }
+          ]
+        }
+      ]
+    },
+    "budgets": {
+      "fields": {
+        "userId": "string",
+        "category": "string",
+        "amount": "number",
+        "spent": "number",
+        "period": "string"
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "field": "userId", "order": "ASCENDING" },
+            { "field": "period", "order": "ASCENDING" }
+          ]
+        }
+      ]
+    },
+    "goals": {
+      "fields": {
+        "userId": "string",
+        "name": "string",
+        "targetAmount": "number",
+        "currentAmount": "number",
+        "deadline": "string",
+        "status": "string"
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "field": "userId", "order": "ASCENDING" }
+          ]
+        }
+      ]
+    },
+    "recurring": {
+      "fields": {
+        "userId": "string",
+        "name": "string",
+        "amount": "number",
+        "category": "string",
+        "type": "string",
+        "frequency": "string",
+        "nextDate": "string",
+        "isActive": "boolean"
+      }
+    },
+    "settings": {
+      "fields": {
+        "userId": "string",
+        "name": "string",
+        "email": "string",
+        "currency": "string",
+        "theme": "string",
+        "notifications": "boolean",
+        "dateFormat": "string"
+      }
+    },
+    "categories": {
+      "fields": {
+        "userId": "string",
+        "name": "string",
+        "type": "string",
+        "icon": "string?",
+        "color": "string?"
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "field": "userId", "order": "ASCENDING" }
+          ]
+        }
+      ]
+    }
+  }
+}

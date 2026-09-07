@@ -1,0 +1,6 @@
+{
+  "name": "DompetKu",
+  "description": "Aplikasi pengelolaan keuangan pribadi modern untuk memantau pengeluaran, anggaran, dan target keuangan Anda.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
