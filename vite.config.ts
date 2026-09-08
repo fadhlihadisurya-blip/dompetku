@@ -17,7 +17,7 @@ export default defineConfig(() => {
           name: 'Dompet Disiplin',
           short_name: 'DompetKu',
           description: 'Aplikasi pengelolaan keuangan pribadi modern untuk memantau pengeluaran, anggaran, dan target keuangan Anda.',
-          theme_color: '#4f46e5',
+          theme_color: '#f97316',
           background_color: '#f8fafc',
           display: 'standalone',
           start_url: 'https://dompetdisiplin.vercel.app',
@@ -46,6 +46,9 @@ export default defineConfig(() => {
         devOptions: {
           enabled: true,
           type: 'module',
+        },
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5000000,
         },
       }),
     ],

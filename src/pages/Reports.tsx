@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Layout } from "../components/Layout";
 import { useFinance } from "../context/FinanceContext";
 import { formatCurrency, cn } from "../lib/utils";
+import jsPDF from "jspdf";
+import { toPng } from "html-to-image";
 import { 
   BarChart, 
   Bar, 
@@ -23,7 +25,8 @@ import {
   TrendingDown, 
   Minus,
   PieChart as PieChartIcon,
-  Download
+  Download,
+  ChevronDown
 } from "lucide-react";
 import { 
   subMonths, 
@@ -41,20 +44,68 @@ import { id } from "date-fns/locale";
 const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
   const { transactions } = useFinance();
   const [timeRange, setTimeRange] = useState("this_month");
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [isExporting, setIsExporting] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return;
+    
+    setIsExporting(true);
+    try {
+      const element = reportRef.current;
+      const dataUrl = await toPng(element, {
+        quality: 1.0,
+        pixelRatio: 3,
+        backgroundColor: "#ffffff",
+      });
+      
+      // F4 size in mm: 210 x 330
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [210, 330]
+      });
+      
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = 190; // 210 - 20 (margins)
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      // Add Page Border
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.rect(5, 5, 200, 320); // 5mm margin from edges
+      
+      pdf.addImage(dataUrl, "PNG", 10, 15, pdfWidth, pdfHeight);
+      pdf.save(`Laporan-Dompet-Disiplin-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    } catch (error) {
+      console.error("Export PDF failed:", error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const filteredTransactions = useMemo(() => {
     const now = new Date();
     let start = startOfMonth(now);
     let end = endOfMonth(now);
 
-    if (timeRange === "last_3_months") start = subMonths(now, 2);
-    if (timeRange === "this_year") start = new Date(now.getFullYear(), 0, 1);
-    if (timeRange === "all") start = subYears(now, 5);
+    if (timeRange === "this_month") {
+      const [year, month] = selectedMonth.split("-").map(Number);
+      start = new Date(year, month - 1, 1);
+      end = endOfMonth(start);
+    } else if (timeRange === "last_3_months") {
+      start = startOfMonth(subMonths(now, 2));
+      end = endOfMonth(now);
+    } else if (timeRange === "this_year") {
+      start = new Date(now.getFullYear(), 0, 1);
+      end = endOfMonth(now);
+    }
 
     return transactions.filter(t => 
-      isWithinInterval(parseISO(t.date), { start, end: now })
+      isWithinInterval(parseISO(t.date), { start, end })
     );
-  }, [transactions, timeRange]);
+  }, [transactions, timeRange, selectedMonth]);
 
   const stats = useMemo(() => {
     const income = filteredTransactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
@@ -76,10 +127,13 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
   }, [filteredTransactions]);
 
   const monthlyTrend = useMemo(() => {
-    const now = new Date();
+    const referenceDate = timeRange === "this_month" 
+      ? endOfMonth(parseISO(`${selectedMonth}-01`)) 
+      : new Date();
+      
     const months = eachMonthOfInterval({
-      start: subMonths(now, 5),
-      end: now
+      start: subMonths(referenceDate, 5),
+      end: referenceDate
     });
 
     return months.map(month => {
@@ -92,7 +146,7 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
         expense
       };
     });
-  }, [transactions]);
+  }, [transactions, timeRange, selectedMonth]);
 
   const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -102,12 +156,21 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
         {/* Filters */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <button 
-              onClick={() => setTimeRange("this_month")}
-              className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all", timeRange === "this_month" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
-            >
-              Bulan Ini
-            </button>
+            <div className="relative flex items-center">
+              <Calendar className={cn("absolute left-3 w-3 h-3 z-10 pointer-events-none", timeRange === "this_month" ? "text-white" : "text-slate-400")} />
+              <input 
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(e.target.value);
+                  setTimeRange("this_month");
+                }}
+                className={cn(
+                  "pl-8 pr-4 py-2 rounded-xl text-xs font-bold transition-all appearance-none bg-transparent border-none focus:ring-0 cursor-pointer",
+                  timeRange === "this_month" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+                )}
+              />
+            </div>
             <button 
               onClick={() => setTimeRange("last_3_months")}
               className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all", timeRange === "last_3_months" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
@@ -121,13 +184,34 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
               Tahun Ini
             </button>
           </div>
-          <button className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-4 text-xs font-bold hover:bg-slate-50 transition-colors">
-            <Download className="w-4 h-4" />
-            Ekspor PDF
+          <button 
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-4 text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className={cn("w-4 h-4", isExporting && "animate-bounce")} />
+            {isExporting ? "Memproses..." : "Ekspor PDF"}
           </button>
         </div>
 
-        {/* Summary Stats */}
+        <div ref={reportRef} className="space-y-8 p-8 bg-white dark:bg-slate-900 rounded-3xl">
+          {/* PDF Header - Only visible in export structure or styled nicely */}
+          <div className="flex justify-between items-end pb-6 border-b-2 border-slate-100 dark:border-slate-800">
+            <div>
+              <h1 className="text-3xl font-black text-orange-600 tracking-tight">DOMPET DISIPLIN</h1>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Personal Finance Report</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-bold text-slate-400 uppercase">Periode Laporan</p>
+              <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
+                {timeRange === "this_month" 
+                  ? format(parseISO(`${selectedMonth}-01`), "MMMM yyyy", { locale: id })
+                  : timeRange === "last_3_months" ? "3 Bulan Terakhir" : "Tahun Ini"}
+              </p>
+            </div>
+          </div>
+
+          {/* Summary Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bento-card p-6">
             <div className="flex items-center gap-3 mb-2">
@@ -242,6 +326,7 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
         </div>
       </div>
     </Layout>
