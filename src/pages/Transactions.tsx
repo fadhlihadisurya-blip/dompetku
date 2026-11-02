@@ -158,23 +158,47 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
     <Layout activeTab="transactions" setActiveTab={setActiveTab} title="Transactions History">
       <div className="space-y-6" onClick={() => setActiveMenuId(null)}>
         {/* Actions & Filters */}
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full lg:w-96">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Cari transaksi atau kategori..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all outline-none"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Cari transaksi atau kategori..."
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-3 pl-11 pr-10 text-sm focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all outline-none"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+              {search && (
+                <button 
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <button 
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white py-3 px-5 rounded-2xl text-sm font-bold shadow-lg shadow-indigo-100 dark:shadow-none transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Transaksi Baru</span>
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
             <select 
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm outline-none focus:border-indigo-600"
+              className="w-full sm:w-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-semibold outline-none focus:border-indigo-600"
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option value="all">Semua Tipe</option>
               <option value="income">Pemasukan</option>
@@ -182,9 +206,12 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
             </select>
 
             <select 
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm outline-none focus:border-indigo-600"
+              className="w-full sm:w-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-semibold outline-none focus:border-indigo-600 truncate"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setCurrentPage(1);
+              }}
             >
               <option value="all">Semua Kategori</option>
               {categories.map(cat => (
@@ -196,24 +223,103 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
               onClick={() => {
                 setSortOrder(sortOrder === "asc" ? "desc" : "asc");
               }}
-              className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              className="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              <ArrowUpDown className="w-4 h-4" />
-              <span>{sortOrder === "desc" ? "Terbaru" : "Terlama"}</span>
-            </button>
-
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="ml-auto lg:ml-0 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100 dark:shadow-none transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Transaksi Baru</span>
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>{sortOrder === "desc" ? "Urutkan: Terbaru" : "Urutkan: Terlama"}</span>
             </button>
           </div>
         </div>
 
-        {/* Transactions Table */}
-        <div className="bento-card overflow-hidden">
+        {/* Mobile View: Responsive Cards List (Visible on HP screens < md) */}
+        <div className="md:hidden space-y-3">
+          {currentItems.length > 0 ? (
+            currentItems.map((t) => {
+              const { formattedDate, formattedDay, formattedTime } = formatTransactionDateTime(t);
+              return (
+                <div 
+                  key={t.id} 
+                  className="bento-card p-4 space-y-3 relative overflow-hidden transition-all border border-slate-200/80 dark:border-slate-800"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={cn(
+                        "w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
+                        t.type === "income" 
+                          ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400" 
+                          : "bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400"
+                      )}>
+                        {t.type === "income" ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {t.description || t.category}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-600 dark:text-slate-300">
+                            {t.category}
+                          </span>
+                          {t.paymentMethod && (
+                            <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-1.5 py-0.5 rounded-md">
+                              {t.paymentMethod}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className={cn(
+                        "text-base font-extrabold tracking-tight",
+                        t.type === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                      )}>
+                        {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+                    <div className="flex flex-wrap items-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
+                      <span>{formattedDay ? `${formattedDay}, ` : ''}{formattedDate}</span>
+                      {formattedTime && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 rounded font-mono ml-1">
+                          <Clock className="w-3 h-3" />
+                          {formattedTime}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEdit(t); }}
+                        className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+                        title="Edit Transaksi"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(t); }}
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+                        title="Hapus Transaksi"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="bento-card py-12 px-4 text-center text-slate-500">
+              <p className="text-sm font-semibold">Tidak ada transaksi yang ditemukan.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View: Transactions Table (Visible on md+) */}
+        <div className="hidden md:block bento-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -253,75 +359,75 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
                             )}
                           </div>
                         </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
-                            t.type === "income" ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" : "bg-rose-100 text-rose-600 dark:bg-rose-900/30"
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                              t.type === "income" ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" : "bg-rose-100 text-rose-600 dark:bg-rose-900/30"
+                            )}>
+                              {t.type === "income" ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[200px]">{t.description}</p>
+                              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-500">{t.category}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <p className={cn(
+                            "text-sm font-bold",
+                            t.type === "income" ? "text-emerald-600" : "text-rose-600"
                           )}>
-                            {t.type === "income" ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[200px]">{t.description}</p>
-                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-slate-500">{t.category}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <p className={cn(
-                          "text-sm font-bold",
-                          t.type === "income" ? "text-emerald-600" : "text-rose-600"
-                        )}>
-                          {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <p className="text-xs text-slate-500 font-medium">{t.paymentMethod}</p>
-                      </td>
-                      <td className="px-6 py-4 text-right relative">
-                        <div className={cn(
-                          "flex items-center justify-end gap-2 transition-all duration-200",
-                          activeMenuId === t.id 
-                            ? "opacity-100 scale-100" 
-                            : "opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto"
-                        )}>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleEdit(t); }}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-500"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteClick(t); }}
-                            className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg transition-colors text-rose-500"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          {activeMenuId === t.id && (
+                            {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <p className="text-xs text-slate-500 font-medium">{t.paymentMethod}</p>
+                        </td>
+                        <td className="px-6 py-4 text-right relative">
+                          <div className={cn(
+                            "flex items-center justify-end gap-2 transition-all duration-200",
+                            activeMenuId === t.id 
+                              ? "opacity-100 scale-100" 
+                              : "opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto"
+                          )}>
                             <button 
-                              onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}
-                              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-400"
+                              onClick={(e) => { e.stopPropagation(); handleEdit(t); }}
+                              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-500"
+                              title="Edit"
                             >
-                              <X className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setActiveMenuId(t.id); }}
-                          className={cn(
-                            "p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all",
-                            activeMenuId === t.id || "group-hover:hidden"
-                          )}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteClick(t); }}
+                              className="p-2 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg transition-colors text-rose-500"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            {activeMenuId === t.id && (
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-400"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setActiveMenuId(t.id); }}
+                            className={cn(
+                              "p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all",
+                              activeMenuId === t.id || "group-hover:hidden"
+                            )}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                       Tidak ada transaksi yang ditemukan.
@@ -331,48 +437,58 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
               </tbody>
             </table>
           </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/30 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
-              <p className="text-xs text-slate-500">
-                Menampilkan <span className="font-bold text-slate-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredTransactions.length)}</span> dari <span className="font-bold text-slate-900 dark:text-white">{filteredTransactions.length}</span> transaksi
-              </p>
-              <div className="flex items-center gap-2">
-                <button 
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-50 transition-colors"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="flex items-center gap-1">
-                  {[...Array(totalPages)].map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentPage(i + 1)}
-                      className={cn(
-                        "w-8 h-8 rounded-lg text-xs font-bold transition-all",
-                        currentPage === i + 1 
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none" 
-                          : "hover:bg-white dark:hover:bg-slate-800 text-slate-500"
-                      )}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                </div>
-                <button 
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900 disabled:opacity-50 transition-colors"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
+
+        {/* Responsive Pagination */}
+        {totalPages > 1 && (
+          <div className="bento-card p-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 border border-slate-200 dark:border-slate-800">
+            <p className="text-xs text-slate-500 text-center sm:text-left">
+              Menampilkan <span className="font-bold text-slate-900 dark:text-white">{(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredTransactions.length)}</span> dari <span className="font-bold text-slate-900 dark:text-white">{filteredTransactions.length}</span> transaksi
+            </p>
+            <div className="flex items-center gap-2">
+              <button 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors"
+                aria-label="Halaman Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              {/* Desktop / Tablet Page Numbers */}
+              <div className="hidden sm:flex items-center gap-1">
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={cn(
+                      "w-8 h-8 rounded-lg text-xs font-bold transition-all",
+                      currentPage === i + 1 
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 dark:shadow-none" 
+                        : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+                    )}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+
+              {/* Mobile HP Page Indicator */}
+              <span className="sm:hidden text-xs font-bold px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-700 dark:text-slate-300">
+                {currentPage} / {totalPages}
+              </span>
+
+              <button 
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors"
+                aria-label="Halaman Selanjutnya"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Modal */}
