@@ -4,7 +4,7 @@ import { StatsGrid, Insights } from "../components/dashboard/DashboardStats";
 import { MainChart, CategoryChart } from "../components/dashboard/DashboardCharts";
 import { useFinance } from "../context/FinanceContext";
 import { formatCurrency, cn } from "../lib/utils";
-import { ChevronRight, Wallet, Plus, ArrowUpRight } from "lucide-react";
+import { ChevronRight, Wallet, Plus, ArrowUpRight, Search, X } from "lucide-react";
 import { Modal } from "../components/Modal";
 import { TransactionForm } from "../components/TransactionForm";
 import { Budget } from "../types";
@@ -12,6 +12,7 @@ import { Budget } from "../types";
 const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; children?: React.ReactNode }> = ({ setActiveTab, children }) => {
   const { budgets } = useFinance();
   const [selectedBudgetForTransaction, setSelectedBudgetForTransaction] = useState<Budget | null>(null);
+  const [budgetSearch, setBudgetSearch] = useState("");
 
   const handleBudgetClick = (b: Budget) => {
     setSelectedBudgetForTransaction(b);
@@ -22,27 +23,58 @@ const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; children?: Reac
     return budgets.filter(b => b.period === currentMonthStr || b.isRecurring || b.period === "recurring");
   }, [budgets, currentMonthStr]);
 
+  const filteredBudgets = useMemo(() => {
+    if (!budgetSearch.trim()) return activeBudgets;
+    const query = budgetSearch.toLowerCase();
+    return activeBudgets.filter(b => b.category.toLowerCase().includes(query));
+  }, [activeBudgets, budgetSearch]);
+
   return (
     <Layout activeTab="dashboard" setActiveTab={setActiveTab} title="Dashboard Overview">
       <div className="space-y-8">
         {/* Top Section: Status Budget */}
         <div className="bento-card p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">Status Budget</h3>
+              <p className="text-xs text-slate-500">Pantau penggunaan anggaran bulanan Anda</p>
             </div>
-            <button 
-              onClick={() => setActiveTab("budget")}
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              Atur Anggaran <ChevronRight className="w-3 h-3" />
-            </button>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {/* Search Box for Budget Status */}
+              <div className="relative flex-1 sm:w-64">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Cari status budget..."
+                  value={budgetSearch}
+                  onChange={(e) => setBudgetSearch(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 pl-9 pr-8 text-xs font-semibold focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 outline-none transition-all"
+                />
+                {budgetSearch && (
+                  <button 
+                    onClick={() => setBudgetSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                    aria-label="Bersihkan pencarian"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <button 
+                onClick={() => setActiveTab("budget")}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                Atur Anggaran <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6">
-            {activeBudgets.length > 0 ? (
+            {filteredBudgets.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {activeBudgets.map((b) => {
+                {filteredBudgets.map((b) => {
                   const percent = b.amount > 0 ? Math.min(100, (b.spent / b.amount) * 100) : 0;
                   const rawPercent = b.amount > 0 ? (b.spent / b.amount) * 100 : 0;
                   return (
@@ -89,6 +121,18 @@ const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; children?: Reac
                     </div>
                   );
                 })}
+              </div>
+            ) : budgetSearch ? (
+              <div className="py-8 text-center space-y-2">
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                  Tidak ada status budget yang cocok dengan "{budgetSearch}"
+                </p>
+                <button 
+                  onClick={() => setBudgetSearch("")}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Bersihkan pencarian
+                </button>
               </div>
             ) : (
               <div className="py-12 text-center">
