@@ -15,6 +15,7 @@ import Settings from "./pages/Settings";
 import { Modal } from "./components/Modal";
 import { TransactionForm } from "./components/TransactionForm";
 import { LoginPage } from "./pages/Login";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -66,6 +67,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <OfflineIndicator />
     </AuthProvider>
   );
 }

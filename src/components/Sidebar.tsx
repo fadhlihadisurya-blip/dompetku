@@ -34,11 +34,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 fixed left-0 top-0 z-50">
       <div className="p-6 flex items-center gap-3">
-        <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-200 dark:shadow-none">
-          D
+        <div className="w-10 h-10 bg-orange-50 dark:bg-slate-900 rounded-2xl flex items-center justify-center p-1 shadow-md border border-orange-100 dark:border-slate-800 shrink-0">
+          <img src="/pwa-192x192.png" alt="Dompet Disiplin" className="w-full h-full object-contain" />
         </div>
         <div>
-          <h1 className="font-bold text-slate-900 dark:text-white leading-tight">DompetKu</h1>
+          <h1 className="font-bold text-slate-900 dark:text-white leading-tight">Dompet Disiplin</h1>
           <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Smart Finance Tracker</p>
         </div>
       </div>
