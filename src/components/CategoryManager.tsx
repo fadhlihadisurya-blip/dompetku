@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { Category, TransactionType } from "../types";
-import { Plus, Trash2, Edit2, X, Check, Tag } from "lucide-react";
+import { Plus, Trash2, Edit2, X, Check, Tag, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "../lib/utils";
 import { ConfirmModal } from "./ConfirmModal";
+
+const INITIAL_VISIBLE_CATEGORIES = 4;
 
 export const CategoryManager: React.FC = () => {
   const { categories, addCategory, updateCategory, deleteCategory } = useFinance();
   const [type, setType] = useState<TransactionType>("expense");
+  const [showAll, setShowAll] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
@@ -15,6 +18,10 @@ export const CategoryManager: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const filteredCategories = categories.filter(c => c.type === type);
+  const hasMoreCategories = filteredCategories.length > INITIAL_VISIBLE_CATEGORIES;
+  const visibleCategories = showAll
+    ? filteredCategories
+    : filteredCategories.slice(0, INITIAL_VISIBLE_CATEGORIES);
 
   const handleAdd = async () => {
     if (!newName.trim()) return;
@@ -50,29 +57,42 @@ export const CategoryManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl w-full max-w-xs">
-        <button
-          onClick={() => setType("expense")}
-          className={cn(
-            "flex-1 py-2 rounded-xl text-xs font-bold transition-all",
-            type === "expense" ? "bg-white dark:bg-slate-800 text-rose-600 shadow-sm" : "text-slate-500"
-          )}
-        >
-          Pengeluaran
-        </button>
-        <button
-          onClick={() => setType("income")}
-          className={cn(
-            "flex-1 py-2 rounded-xl text-xs font-bold transition-all",
-            type === "income" ? "bg-white dark:bg-slate-800 text-emerald-600 shadow-sm" : "text-slate-500"
-          )}
-        >
-          Pemasukan
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl w-full max-w-xs">
+          <button
+            type="button"
+            onClick={() => {
+              setType("expense");
+              setShowAll(false);
+            }}
+            className={cn(
+              "flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+              type === "expense" ? "bg-white dark:bg-slate-800 text-rose-600 shadow-sm" : "text-slate-500"
+            )}
+          >
+            Pengeluaran
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setType("income");
+              setShowAll(false);
+            }}
+            className={cn(
+              "flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer",
+              type === "income" ? "bg-white dark:bg-slate-800 text-emerald-600 shadow-sm" : "text-slate-500"
+            )}
+          >
+            Pemasukan
+          </button>
+        </div>
+        <span className="text-xs font-semibold text-slate-400">
+          {filteredCategories.length} kategori
+        </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {filteredCategories.map((cat) => (
+        {visibleCategories.map((cat) => (
           <div 
             key={cat.id} 
             className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl group hover:border-indigo-500/50 transition-all"
@@ -160,13 +180,35 @@ export const CategoryManager: React.FC = () => {
         ) : (
           <button 
             onClick={() => setIsAdding(true)}
-            className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-indigo-500 hover:border-indigo-500/50 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all"
+            className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-indigo-500 hover:border-indigo-500/50 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 transition-all cursor-pointer"
           >
             <Plus className="w-5 h-5" />
             <span className="text-sm font-bold uppercase tracking-wider">Tambah Kategori</span>
           </button>
         )}
       </div>
+
+      {hasMoreCategories && (
+        <div className="flex justify-center pt-1">
+          <button
+            type="button"
+            onClick={() => setShowAll((prev) => !prev)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer"
+          >
+            {showAll ? (
+              <>
+                <ChevronUp className="w-4 h-4" />
+                <span>See less</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-4 h-4" />
+                <span>See more ({filteredCategories.length - INITIAL_VISIBLE_CATEGORIES} lainnya)</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Confirm Delete Category Modal */}
       <ConfirmModal

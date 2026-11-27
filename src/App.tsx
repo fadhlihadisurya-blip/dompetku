@@ -10,15 +10,19 @@ import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import BudgetPage from "./pages/Budget";
 import GoalsPage from "./pages/Goals";
-import Reports from "./pages/Reports";
+import Reports, { ReportRoleFilter } from "./pages/Reports";
+import PurchasesPage from "./pages/Purchases";
+import FamilyPage from "./pages/Family";
 import Settings from "./pages/Settings";
 import { Modal } from "./components/Modal";
 import { TransactionForm } from "./components/TransactionForm";
 import { LoginPage } from "./pages/Login";
 import { OfflineIndicator } from "./components/OfflineIndicator";
+import { FamilyRole } from "./types";
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [reportRole, setReportRole] = useState<ReportRoleFilter>("self");
   const { user } = useAuth();
 
   if (!user) {
@@ -36,13 +40,27 @@ function AppContent() {
       case "goals":
         return <GoalsPage setActiveTab={setActiveTab} />;
       case "reports":
-        return <Reports setActiveTab={setActiveTab} />;
+        return (
+          <Reports
+            setActiveTab={setActiveTab}
+            selectedRole={reportRole}
+            onSelectedRoleChange={setReportRole}
+          />
+        );
       case "settings":
         return <Settings setActiveTab={setActiveTab} />;
-      case "recurring":
-        return <div className="p-8 text-center text-slate-500">Fitur Transaksi Berulang sedang dalam pengembangan.</div>;
-      case "notifications":
-        return <div className="p-8 text-center text-slate-500">Halaman Notifikasi sedang dalam pengembangan.</div>;
+      case "purchases":
+        return <PurchasesPage setActiveTab={setActiveTab} />;
+      case "family":
+        return (
+          <FamilyPage
+            setActiveTab={setActiveTab}
+            onOpenRoleReport={(role: FamilyRole) => {
+              setReportRole(role);
+              setActiveTab("reports");
+            }}
+          />
+        );
       case "add_transaction":
         return (
           <Dashboard setActiveTab={setActiveTab}>

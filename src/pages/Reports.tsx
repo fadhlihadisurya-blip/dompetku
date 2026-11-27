@@ -1,6 +1,8 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Layout } from "../components/Layout";
 import { useFinance } from "../context/FinanceContext";
+import { useAuth } from "../context/AuthContext";
+import { FAMILY_ROLES, FamilyMemberReport, FamilyRole } from "../types";
 import { formatCurrency, cn } from "../lib/utils";
 import jsPDF from "jspdf";
 import { toPng } from "html-to-image";
@@ -13,8 +15,6 @@ import {
   Tooltip, 
   ResponsiveContainer,
   Cell,
-  PieChart,
-  Pie,
   LineChart,
   Line
 } from "recharts";
@@ -23,10 +23,8 @@ import {
   Calendar, 
   TrendingUp, 
   TrendingDown, 
-  Minus,
-  PieChart as PieChartIcon,
   Download,
-  ChevronDown
+  Users
 } from "lucide-react";
 import { 
   subMonths, 
@@ -36,17 +34,93 @@ import {
   parseISO, 
   format,
   eachMonthOfInterval,
-  subYears,
   isSameMonth
 } from "date-fns";
 import { id } from "date-fns/locale";
 
-const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
-  const { transactions } = useFinance();
+export type ReportRoleFilter = "self" | FamilyRole;
+
+interface ReportsProps {
+  setActiveTab: (tab: string) => void;
+  selectedRole?: ReportRoleFilter;
+  onSelectedRoleChange?: (role: ReportRoleFilter) => void;
+}
+
+const Reports: React.FC<ReportsProps> = ({
+  setActiveTab,
+  selectedRole: controlledRole,
+  onSelectedRoleChange,
+}) => {
+  const { user } = useAuth();
+  const { transactions, settings, family, familyLink, subscribeMemberReport } = useFinance();
   const [timeRange, setTimeRange] = useState("this_month");
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [internalRole, setInternalRole] = useState<ReportRoleFilter>("self");
+  const [memberReportsMap, setMemberReportsMap] = useState<Record<string, FamilyMemberReport | null>>({});
   const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const selectedRole = controlledRole ?? internalRole;
+  const setSelectedRole = (next: ReportRoleFilter) => {
+    setInternalRole(next);
+    onSelectedRoleChange?.(next);
+  };
+
+  const matchingMembers = useMemo(() => {
+    if (selectedRole === "self" || !family) return [];
+    return family.members.filter((m) => m.role === selectedRole);
+  }, [selectedRole, family]);
+
+  useEffect(() => {
+    if (selectedRole === "self" || !family || matchingMembers.length === 0) {
+      setMemberReportsMap({});
+      return;
+    }
+
+    const unsubscribers = matchingMembers.map((member) => {
+      if (member.userId === user?.uid) {
+        return () => {};
+      }
+      return subscribeMemberReport(member.userId, (report) => {
+        setMemberReportsMap((prev) => ({
+          ...prev,
+          [member.userId]: report,
+        }));
+      });
+    });
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [selectedRole, family?.id, matchingMembers, user?.uid, subscribeMemberReport]);
+
+  const activeTransactions = useMemo(() => {
+    if (selectedRole === "self") {
+      return transactions;
+    }
+    if (!family || matchingMembers.length === 0) {
+      return [];
+    }
+
+    return matchingMembers.flatMap((member) => {
+      if (member.userId === user?.uid) {
+        return transactions;
+      }
+      return memberReportsMap[member.userId]?.transactions || [];
+    });
+  }, [selectedRole, family, matchingMembers, user?.uid, transactions, memberReportsMap]);
+
+  const activeAccountLabel = useMemo(() => {
+    const myName = user?.displayName || settings.name || "Akun Saya";
+    if (selectedRole === "self") {
+      return familyLink?.role ? `${myName} (${familyLink.role})` : myName;
+    }
+    if (!family || matchingMembers.length === 0) {
+      return `${selectedRole} (Belum ditautkan)`;
+    }
+    const names = matchingMembers.map((m) => m.name).join(", ");
+    return `${names} (${selectedRole})`;
+  }, [selectedRole, user?.displayName, settings.name, familyLink?.role, family, matchingMembers]);
 
   const handleExportPDF = async () => {
     if (!reportRef.current) return;
@@ -102,10 +176,10 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
       end = endOfMonth(now);
     }
 
-    return transactions.filter(t => 
+    return activeTransactions.filter(t => 
       isWithinInterval(parseISO(t.date), { start, end })
     );
-  }, [transactions, timeRange, selectedMonth]);
+  }, [activeTransactions, timeRange, selectedMonth]);
 
   const stats = useMemo(() => {
     const income = filteredTransactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
@@ -137,7 +211,7 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
     });
 
     return months.map(month => {
-      const monthTransactions = transactions.filter(t => isSameMonth(parseISO(t.date), month));
+      const monthTransactions = activeTransactions.filter(t => isSameMonth(parseISO(t.date), month));
       const income = monthTransactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0);
       const expense = monthTransactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0);
       return {
@@ -146,7 +220,7 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
         expense
       };
     });
-  }, [transactions, timeRange, selectedMonth]);
+  }, [activeTransactions, timeRange, selectedMonth]);
 
   const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -154,54 +228,116 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
     <Layout activeTab="reports" setActiveTab={setActiveTab} title="Reports & Analytics">
       <div className="space-y-8">
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="relative flex items-center">
-              <Calendar className={cn("absolute left-3 w-3 h-3 z-10 pointer-events-none", timeRange === "this_month" ? "text-white" : "text-slate-400")} />
-              <input 
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(e.target.value);
-                  setTimeRange("this_month");
-                }}
-                className={cn(
-                  "pl-8 pr-4 py-2 rounded-xl text-xs font-bold transition-all appearance-none bg-transparent border-none focus:ring-0 cursor-pointer",
-                  timeRange === "this_month" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
-                )}
-              />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="relative flex items-center">
+                <Calendar className={cn("absolute left-3 w-3 h-3 z-10 pointer-events-none", timeRange === "this_month" ? "text-white" : "text-slate-400")} />
+                <input 
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    setSelectedMonth(e.target.value);
+                    setTimeRange("this_month");
+                  }}
+                  className={cn(
+                    "pl-8 pr-4 py-2 rounded-xl text-xs font-bold transition-all appearance-none bg-transparent border-none focus:ring-0 cursor-pointer",
+                    timeRange === "this_month" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  )}
+                />
+              </div>
+              <button 
+                onClick={() => setTimeRange("last_3_months")}
+                className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer", timeRange === "last_3_months" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
+              >
+                3 Bulan
+              </button>
+              <button 
+                onClick={() => setTimeRange("this_year")}
+                className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer", timeRange === "this_year" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
+              >
+                Tahun Ini
+              </button>
             </div>
-            <button 
-              onClick={() => setTimeRange("last_3_months")}
-              className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all", timeRange === "last_3_months" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
-            >
-              3 Bulan
-            </button>
-            <button 
-              onClick={() => setTimeRange("this_year")}
-              className={cn("px-4 py-2 rounded-xl text-xs font-bold transition-all", timeRange === "this_year" ? "bg-indigo-600 text-white shadow-md" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}
-            >
-              Tahun Ini
-            </button>
+
+            {/* Family Role Dropdown */}
+            <div className="relative flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-3 py-1.5">
+              <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mr-2 shrink-0" />
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as ReportRoleFilter)}
+                aria-label="Pilih Role Keluarga"
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-white pr-2 py-1 outline-none cursor-pointer"
+              >
+                <option value="self" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  Akun Saya{familyLink?.role ? ` (${familyLink.role})` : ""}
+                </option>
+                {FAMILY_ROLES.map((role) => {
+                  const roleMembers = family?.members.filter((m) => m.role === role) || [];
+                  const suffix =
+                    roleMembers.length === 1
+                      ? ` — ${roleMembers[0].name}`
+                      : roleMembers.length > 1
+                      ? ` (${roleMembers.length} akun)`
+                      : "";
+                  return (
+                    <option
+                      key={role}
+                      value={role}
+                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    >
+                      {role}{suffix}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
+
           <button 
             onClick={handleExportPDF}
             disabled={isExporting}
-            className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-4 text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-4 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Download className={cn("w-4 h-4", isExporting && "animate-bounce")} />
             {isExporting ? "Memproses..." : "Ekspor PDF"}
           </button>
         </div>
 
+        {/* Unlinked Role Prompt */}
+        {selectedRole !== "self" && matchingMembers.length === 0 && (
+          <div className="bento-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
+            <div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                Belum ada akun keluarga dengan role {selectedRole}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                {family
+                  ? `Tautkan akun lain dan tetapkan role ${selectedRole} di menu Family agar laporannya muncul di sini.`
+                  : "Buat atau gabung ke dalam keluarga di menu Family terlebih dahulu untuk melihat laporan anggota keluarga."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("family")}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shrink-0 cursor-pointer"
+            >
+              Buka Menu Family
+            </button>
+          </div>
+        )}
+
         <div ref={reportRef} className="space-y-8 p-8 bg-white dark:bg-slate-900 rounded-3xl">
           {/* PDF Header - Only visible in export structure or styled nicely */}
-          <div className="flex justify-between items-end pb-6 border-b-2 border-slate-100 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 pb-6 border-b-2 border-slate-100 dark:border-slate-800">
             <div>
               <h1 className="text-3xl font-black text-orange-600 tracking-tight">DOMPET DISIPLIN</h1>
               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Personal Finance Report</p>
+              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+                Akun: {activeAccountLabel}
+              </p>
             </div>
-            <div className="text-right">
+            <div className="sm:text-right">
               <p className="text-xs font-bold text-slate-400 uppercase">Periode Laporan</p>
               <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
                 {timeRange === "this_month" 
@@ -253,58 +389,22 @@ const Reports: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveT
           </div>
         </div>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Monthly Trend */}
-          <div className="bento-card p-8">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tren 6 Bulan Terakhir</h3>
-            </div>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyTrend} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(value) => `${value/1000}k`} />
-                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => formatCurrency(value)} />
-                  <Line type="monotone" dataKey="income" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+        {/* Monthly Trend */}
+        <div className="bento-card p-8">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tren 6 Bulan Terakhir</h3>
           </div>
-
-          {/* Expense Breakdown */}
-          <div className="bento-card p-8">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-8">Proporsi Pengeluaran</h3>
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="w-full md:w-1/2 h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none' }} formatter={(value: number) => formatCurrency(value)} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="w-full md:w-1/2 space-y-4">
-                {categoryData.slice(0, 4).map((item, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                        <span className="font-bold text-slate-700 dark:text-slate-300">{item.name}</span>
-                      </div>
-                      <span className="font-bold text-slate-900 dark:text-white">{((item.value / stats.expense) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div className="h-full" style={{ width: `${(item.value / stats.expense) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlyTrend} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(value) => `${value/1000}k`} />
+                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} formatter={(value: number) => formatCurrency(value)} />
+                <Line type="monotone" dataKey="income" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4, fill: '#f43f5e', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Layout } from "../components/Layout";
 import { StatsGrid, Insights } from "../components/dashboard/DashboardStats";
-import { MainChart, CategoryChart } from "../components/dashboard/DashboardCharts";
+import { MainChart } from "../components/dashboard/DashboardCharts";
 import { useFinance } from "../context/FinanceContext";
 import { formatCurrency, cn } from "../lib/utils";
 import { ChevronRight, Wallet, Plus, ArrowUpRight, Search, X } from "lucide-react";
@@ -175,14 +175,7 @@ const Dashboard: React.FC<{ setActiveTab: (tab: string) => void; children?: Reac
         <StatsGrid />
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <MainChart />
-          </div>
-          <div>
-            <CategoryChart />
-          </div>
-        </div>
+        <MainChart />
       </div>
     </Layout>
   );

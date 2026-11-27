@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Layout } from "../components/Layout";
 import { useFinance } from "../context/FinanceContext";
-import { formatCurrency, getTransactionTimestamp, cn } from "../lib/utils";
+import { formatAppDate, formatCurrency, getTransactionTimestamp, cn } from "../lib/utils";
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
@@ -79,7 +79,7 @@ const Transactions: React.FC<{ setActiveTab: (tab: string) => void; initialCateg
 
     const rawDay = format(dateObj, "EEEE", { locale: id });
     const formattedDay = rawDay ? rawDay.charAt(0).toUpperCase() + rawDay.slice(1) : "";
-    const formattedDate = format(dateObj, "dd MMM yyyy", { locale: id });
+    const formattedDate = formatAppDate(dateObj);
     const formattedTime = timeStr ? `${timeStr} WIB` : null;
 
     return { formattedDate, formattedDay, formattedTime };

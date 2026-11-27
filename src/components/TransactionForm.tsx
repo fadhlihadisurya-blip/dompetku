@@ -2,16 +2,18 @@ import React, { useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { PAYMENT_METHODS } from "../lib/constants";
 import { TransactionType } from "../types";
-import { cn } from "../lib/utils";
+import { cn, getCurrencySymbol } from "../lib/utils";
 import { Clock } from "lucide-react";
 
 interface TransactionFormProps {
   onClose: () => void;
   initialData?: any;
+  onSaved?: () => void;
 }
 
-export const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, initialData }) => {
-  const { addTransaction, updateTransaction, categories } = useFinance();
+export const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, initialData, onSaved }) => {
+  const { addTransaction, updateTransaction, categories, settings } = useFinance();
+  const currencySymbol = getCurrencySymbol(settings.currency);
   const [type, setType] = useState<TransactionType>(initialData?.type || "expense");
 
   const filteredCategories = categories.filter(c => c.type === type);
@@ -104,6 +106,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, initi
     } else {
       addTransaction(data as any);
     }
+    onSaved?.();
     onClose();
   };
 
@@ -135,7 +138,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, initi
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-slate-500 uppercase ml-1">Nominal</label>
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">{currencySymbol}</span>
           <input
             type="number"
             required

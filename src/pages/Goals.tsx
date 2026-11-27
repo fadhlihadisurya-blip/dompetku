@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { Layout } from "../components/Layout";
 import { useFinance } from "../context/FinanceContext";
-import { formatCurrency, cn } from "../lib/utils";
+import { formatAppDate, formatCurrency, cn } from "../lib/utils";
 import { Plus, Target, Calendar, Edit2, Trash2, CheckCircle2 } from "lucide-react";
 import { Modal } from "../components/Modal";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { GoalForm } from "../components/GoalForm";
-import { format, parseISO, differenceInDays } from "date-fns";
-import { id } from "date-fns/locale";
+import { parseISO, differenceInDays } from "date-fns";
 import { FinancialGoal } from "../types";
 
 const GoalsPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiveTab }) => {
@@ -77,7 +76,7 @@ const GoalsPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActiv
                         <h4 className="text-xl font-bold text-slate-900 dark:text-white">{g.name}</h4>
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <Calendar className="w-3 h-3" />
-                          <span>Deadline: {format(parseISO(g.deadline), "dd MMMM yyyy", { locale: id })}</span>
+                          <span>Deadline: {formatAppDate(g.deadline)}</span>
                         </div>
                       </div>
                     </div>

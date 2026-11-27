@@ -1,12 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
     // Helper function to check if user is authenticated and owns the document
     function isOwner(userId) {
-      return request.auth != null && (
+      return isSignedIn() && (
         request.auth.uid == userId || 
         (request.auth.token.email == 'f4dly.ank2@gmail.com' && userId == '7QDuuEZOGtOG76rkz9rP0rCt6c13')
       );
+    }
+
+    function isUidInList(uids) {
+      return isSignedIn() && (
+        request.auth.uid in uids ||
+        (request.auth.token.email == 'f4dly.ank2@gmail.com' && '7QDuuEZOGtOG76rkz9rP0rCt6c13' in uids)
+      );
+    }
+
+    function isValidFamilyRole(role) {
+      return role in ['Husband', 'Wife', 'Son', 'Daughter'];
+    }
+
+    function isMemberOfFamilyPath(familyId) {
+      return exists(/databases/$(database)/documents/families/$(familyId)) &&
+        isUidInList(get(/databases/$(database)/documents/families/$(familyId)).data.memberUids);
+    }
+
+    function isMemberAfterFamilyPath(familyId) {
+      return existsAfter(/databases/$(database)/documents/families/$(familyId)) &&
+        isUidInList(getAfter(/databases/$(database)/documents/families/$(familyId)).data.memberUids);
     }
 
     match /transactions/{id} {
@@ -41,6 +75,218 @@ service cloud.firestore {
       allow read: if isOwner(resource.data.userId);
       allow create: if isOwner(request.resource.data.userId);
       allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    function isValidPurchase(data) {
+      return data.keys().hasAll(['userId', 'name', 'price', 'quantity', 'category', 'isPurchased', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'name', 'price', 'quantity', 'category', 'notes', 'isPurchased', 'createdAt', 'updatedAt', 'purchasedAt', 'linkedTransactionCreated']) &&
+        data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.price is number && data.price >= 0 &&
+        data.quantity is number && data.quantity >= 1 && data.quantity <= 9999 &&
+        data.category is string && data.category.size() <= 80 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+        data.isPurchased is bool &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50 &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50)) &&
+        (!('purchasedAt' in data) || data.purchasedAt == null || (data.purchasedAt is string && data.purchasedAt.size() <= 50)) &&
+        (!('linkedTransactionCreated' in data) || data.linkedTransactionCreated is bool);
+    }
+
+    match /purchases/{id} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId) && isValidPurchase(request.resource.data);
+      allow update: if isOwner(resource.data.userId) &&
+        isValidPurchase(request.resource.data) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    function isValidUserFamilyLink(data, userId) {
+      return data.keys().hasAll(['userId', 'familyId', 'role', 'updatedAt']) &&
+        data.keys().hasOnly(['userId', 'familyId', 'role', 'updatedAt']) &&
+        data.userId == userId &&
+        data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+        isValidFamilyRole(data.role) &&
+        data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 50;
+    }
+
+    match /userFamilyLinks/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create, update: if isValidId(userId) && isOwner(userId) && isValidUserFamilyLink(request.resource.data, userId);
+      allow delete: if isValidId(userId) && isOwner(userId);
+    }
+
+    function isValidFamily(data) {
+      return data.keys().hasAll(['name', 'ownerId', 'inviteCode', 'memberUids', 'members', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['name', 'ownerId', 'inviteCode', 'memberUids', 'members', 'createdAt', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.inviteCode is string && data.inviteCode.size() >= 6 && data.inviteCode.size() <= 20 &&
+        data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 && data.memberUids[0] is string &&
+        data.members is list && data.members.size() >= 1 && data.members.size() <= 12 && data.members[0] is map &&
+        data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 50 &&
+        data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 50;
+    }
+
+    match /families/{familyId} {
+      allow get: if isValidId(familyId) && isUidInList(resource.data.memberUids);
+      allow list: if false;
+      allow create: if isValidId(familyId) &&
+        isOwner(request.resource.data.ownerId) &&
+        isValidFamily(request.resource.data) &&
+        request.resource.data.memberUids.size() == 1 &&
+        isUidInList(request.resource.data.memberUids);
+      allow update: if isValidId(familyId) &&
+        isSignedIn() &&
+        isValidFamily(request.resource.data) &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.inviteCode == resource.data.inviteCode && (
+          (isOwner(resource.data.ownerId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'ownerId', 'memberUids', 'members', 'updatedAt'])) ||
+          (isUidInList(resource.data.memberUids) &&
+            request.resource.data.ownerId == resource.data.ownerId &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'memberUids', 'updatedAt'])) ||
+          (!isUidInList(resource.data.memberUids) &&
+            request.resource.data.ownerId == resource.data.ownerId &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members', 'updatedAt']) &&
+            request.resource.data.memberUids.hasAll(resource.data.memberUids) &&
+            request.resource.data.memberUids.size() == resource.data.memberUids.size() + 1 &&
+            isUidInList(request.resource.data.memberUids) &&
+            request.resource.data.members.hasAll(resource.data.members) &&
+            request.resource.data.members.size() == resource.data.members.size() + 1)
+        );
+      allow delete: if isValidId(familyId) && isOwner(resource.data.ownerId);
+
+      function isValidMemberReport(data, targetFamilyId, targetMemberId) {
+        return data.keys().hasAll(['userId', 'familyId', 'name', 'role', 'transactions', 'updatedAt']) &&
+          data.keys().hasOnly(['userId', 'familyId', 'name', 'role', 'transactions', 'updatedAt']) &&
+          data.userId == targetMemberId &&
+          data.familyId == targetFamilyId &&
+          data.name is string && data.name.size() <= 80 &&
+          isValidFamilyRole(data.role) &&
+          data.transactions is list && data.transactions.size() <= 2000 &&
+          data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 50;
+      }
+
+      match /memberReports/{memberId} {
+        allow get: if isValidId(familyId) && isValidId(memberId) && isMemberOfFamilyPath(familyId);
+        allow list: if false;
+        allow create: if isValidId(familyId) && isValidId(memberId) &&
+          isOwner(memberId) &&
+          isValidMemberReport(request.resource.data, familyId, memberId) &&
+          (isMemberOfFamilyPath(familyId) || isMemberAfterFamilyPath(familyId));
+        allow update: if isValidId(familyId) && isValidId(memberId) &&
+          isValidMemberReport(request.resource.data, familyId, memberId) &&
+          isMemberOfFamilyPath(familyId) && (
+            isOwner(memberId) ||
+            (exists(/databases/$(database)/documents/families/$(familyId)) &&
+              isOwner(get(/databases/$(database)/documents/families/$(familyId)).data.ownerId) &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']))
+          );
+        allow delete: if isValidId(familyId) && isValidId(memberId) && (
+          isOwner(memberId) ||
+          (exists(/databases/$(database)/documents/families/$(familyId)) &&
+            isOwner(get(/databases/$(database)/documents/families/$(familyId)).data.ownerId))
+        );
+      }
+
+      function isValidFamilyPurchase(data, targetFamilyId) {
+        return data.keys().hasAll(['userId', 'familyId', 'name', 'price', 'quantity', 'category', 'isPurchased', 'createdAt']) &&
+          data.keys().hasOnly(['userId', 'familyId', 'name', 'price', 'quantity', 'category', 'notes', 'isPurchased', 'createdAt', 'updatedAt', 'purchasedAt', 'linkedTransactionCreated', 'addedByName', 'addedByRole', 'purchasedByName']) &&
+          data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+          data.familyId == targetFamilyId &&
+          data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+          data.price is number && data.price >= 0 &&
+          data.quantity is number && data.quantity >= 1 && data.quantity <= 9999 &&
+          data.category is string && data.category.size() <= 80 &&
+          (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+          data.isPurchased is bool &&
+          data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50 &&
+          (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50)) &&
+          (!('purchasedAt' in data) || data.purchasedAt == null || (data.purchasedAt is string && data.purchasedAt.size() <= 50)) &&
+          (!('linkedTransactionCreated' in data) || data.linkedTransactionCreated is bool) &&
+          (!('addedByName' in data) || (data.addedByName is string && data.addedByName.size() <= 80)) &&
+          (!('addedByRole' in data) || (data.addedByRole is string && data.addedByRole.size() <= 30)) &&
+          (!('purchasedByName' in data) || (data.purchasedByName is string && data.purchasedByName.size() <= 80));
+      }
+
+      match /purchases/{purchaseId} {
+        allow get: if isValidId(familyId) && isValidId(purchaseId) && isMemberOfFamilyPath(familyId);
+        allow list: if isValidId(familyId) && isMemberOfFamilyPath(familyId);
+        allow create: if isValidId(familyId) && isValidId(purchaseId) &&
+          isOwner(request.resource.data.userId) &&
+          isMemberOfFamilyPath(familyId) &&
+          isValidFamilyPurchase(request.resource.data, familyId);
+        allow update: if isValidId(familyId) && isValidId(purchaseId) &&
+          isMemberOfFamilyPath(familyId) &&
+          isValidFamilyPurchase(request.resource.data, familyId) &&
+          request.resource.data.familyId == resource.data.familyId &&
+          request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isValidId(familyId) && isValidId(purchaseId) && isMemberOfFamilyPath(familyId);
+      }
+    }
+
+    function isValidFamilyInvite(data, code) {
+      return data.keys().hasAll(['familyId', 'familyName', 'ownerId', 'inviteCode', 'createdAt']) &&
+        data.keys().hasOnly(['familyId', 'familyName', 'ownerId', 'inviteCode', 'createdAt']) &&
+        data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+        data.familyName is string && data.familyName.size() >= 1 && data.familyName.size() <= 80 &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.inviteCode == code &&
+        data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 50;
+    }
+
+    match /familyInvites/{inviteCode} {
+      allow get: if isValidId(inviteCode) && isSignedIn();
+      allow list: if false;
+      allow create: if isValidId(inviteCode) &&
+        isOwner(request.resource.data.ownerId) &&
+        isValidFamilyInvite(request.resource.data, inviteCode);
+      allow delete: if isValidId(inviteCode) && isOwner(resource.data.ownerId);
+    }
+
+    function isValidEmailInvite(data) {
+      return data.keys().hasAll(['familyId', 'familyName', 'inviteCode', 'invitedByUid', 'invitedByName', 'targetEmail', 'suggestedRole', 'status', 'createdAt']) &&
+        data.keys().hasOnly(['familyId', 'familyName', 'inviteCode', 'invitedByUid', 'invitedByName', 'targetEmail', 'suggestedRole', 'status', 'createdAt']) &&
+        data.familyId is string && data.familyId.size() >= 1 && data.familyId.size() <= 128 &&
+        data.familyName is string && data.familyName.size() >= 1 && data.familyName.size() <= 80 &&
+        data.inviteCode is string && data.inviteCode.size() >= 6 && data.inviteCode.size() <= 20 &&
+        data.invitedByUid is string && data.invitedByUid.size() >= 1 && data.invitedByUid.size() <= 128 &&
+        data.invitedByName is string && data.invitedByName.size() <= 80 &&
+        data.targetEmail is string && data.targetEmail.size() >= 3 && data.targetEmail.size() <= 120 &&
+        isValidFamilyRole(data.suggestedRole) &&
+        data.status in ['pending', 'accepted', 'declined'] &&
+        data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 50;
+    }
+
+    match /familyEmailInvites/{inviteId} {
+      allow get: if isValidId(inviteId) && isSignedIn() && (
+        isOwner(resource.data.invitedByUid) ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.targetEmail)
+      );
+      allow list: if isSignedIn() && (
+        isOwner(resource.data.invitedByUid) ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.targetEmail)
+      );
+      allow create: if isValidId(inviteId) &&
+        isOwner(request.resource.data.invitedByUid) &&
+        isValidEmailInvite(request.resource.data) &&
+        request.resource.data.status == 'pending' &&
+        isMemberOfFamilyPath(request.resource.data.familyId);
+      allow update: if isValidId(inviteId) &&
+        isSignedIn() &&
+        isValidEmailInvite(request.resource.data) &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() == resource.data.targetEmail &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+        request.resource.data.status in ['accepted', 'declined'];
+      allow delete: if isValidId(inviteId) && isSignedIn() && (
+        isOwner(resource.data.invitedByUid) ||
+        (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.targetEmail)
+      );
     }
   }
 }

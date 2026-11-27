@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { CATEGORIES } from "../lib/constants";
-import { formatCurrency, cn } from "../lib/utils";
+import { formatCurrency, getCurrencySymbol, cn } from "../lib/utils";
 import { Check, Calendar, Repeat } from "lucide-react";
 
 interface BudgetFormProps {
@@ -10,7 +10,8 @@ interface BudgetFormProps {
 }
 
 export const BudgetForm: React.FC<BudgetFormProps> = ({ onClose, initialData }) => {
-  const { addBudget, updateBudget, categories } = useFinance();
+  const { addBudget, updateBudget, categories, settings } = useFinance();
+  const currencySymbol = getCurrencySymbol(settings.currency);
 
   const now = new Date();
   const currentMonth = now.toISOString().substring(0, 7); // "YYYY-MM"
@@ -83,7 +84,7 @@ export const BudgetForm: React.FC<BudgetFormProps> = ({ onClose, initialData }) 
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-slate-500 uppercase ml-1">Limit Anggaran Bulanan</label>
         <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">Rp</span>
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">{currencySymbol}</span>
           <input
             type="number"
             required

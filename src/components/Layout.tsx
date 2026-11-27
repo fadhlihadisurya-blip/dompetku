@@ -2,7 +2,7 @@ import React from "react";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { motion, AnimatePresence } from "motion/react";
-import { Bell, Search, User } from "lucide-react";
+import { Users, Search, User } from "lucide-react";
 import { useFinance } from "../context/FinanceContext";
 import { PWAInstallButton } from "./PWAInstallButton";
 
@@ -14,7 +14,7 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, title }) => {
-  const { settings } = useFinance();
+  const { settings, pendingFamilyInvites } = useFinance();
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -33,11 +33,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
               <Search className="w-5 h-5" />
             </button>
             <button 
-              onClick={() => setActiveTab("notifications")}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900 rounded-xl transition-colors relative"
+              onClick={() => setActiveTab("family")}
+              title="Family"
+              aria-label="Family"
+              className="p-2 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900 rounded-xl transition-colors relative cursor-pointer"
             >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-50 dark:border-slate-950"></span>
+              <Users className="w-5 h-5" />
+              {pendingFamilyInvites.length > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-slate-50 dark:border-slate-950"></span>
+              )}
             </button>
             <div className="flex items-center gap-3 pl-2 border-l border-slate-200 dark:border-slate-800">
               <div className="text-right hidden sm:block">

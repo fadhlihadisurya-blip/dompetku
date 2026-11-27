@@ -95,6 +95,98 @@
           ]
         }
       ]
+    },
+    "purchases": {
+      "fields": {
+        "userId": "string",
+        "name": "string",
+        "price": "number",
+        "quantity": "number",
+        "category": "string",
+        "notes": "string?",
+        "isPurchased": "boolean",
+        "createdAt": "string",
+        "updatedAt": "string?",
+        "purchasedAt": "string?",
+        "linkedTransactionCreated": "boolean?"
+      },
+      "indexes": [
+        {
+          "fields": [
+            { "field": "userId", "order": "ASCENDING" }
+          ]
+        }
+      ]
+    },
+    "userFamilyLinks": {
+      "fields": {
+        "userId": "string",
+        "familyId": "string",
+        "role": "string",
+        "updatedAt": "string"
+      }
+    },
+    "families": {
+      "fields": {
+        "name": "string",
+        "ownerId": "string",
+        "inviteCode": "string",
+        "memberUids": "array",
+        "members": "array",
+        "createdAt": "string",
+        "updatedAt": "string"
+      }
+    },
+    "families/{familyId}/memberReports": {
+      "fields": {
+        "userId": "string",
+        "familyId": "string",
+        "name": "string",
+        "role": "string",
+        "transactions": "array",
+        "updatedAt": "string"
+      }
+    },
+    "families/{familyId}/purchases": {
+      "fields": {
+        "userId": "string",
+        "familyId": "string",
+        "name": "string",
+        "price": "number",
+        "quantity": "number",
+        "category": "string",
+        "notes": "string?",
+        "isPurchased": "boolean",
+        "createdAt": "string",
+        "updatedAt": "string?",
+        "purchasedAt": "string?",
+        "linkedTransactionCreated": "boolean?",
+        "addedByName": "string?",
+        "addedByRole": "string?",
+        "purchasedByName": "string?"
+      }
+    },
+    "familyInvites": {
+      "fields": {
+        "familyId": "string",
+        "familyName": "string",
+        "ownerId": "string",
+        "inviteCode": "string",
+        "createdAt": "string"
+      }
+    },
+    "familyEmailInvites": {
+      "fields": {
+        "familyId": "string",
+        "familyName": "string",
+        "inviteCode": "string",
+        "invitedByUid": "string",
+        "invitedByName": "string",
+        "targetEmail": "string",
+        "suggestedRole": "string",
+        "status": "string",
+        "createdAt": "string"
+      }
     }
   }
 }

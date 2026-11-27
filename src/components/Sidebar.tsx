@@ -5,8 +5,8 @@ import {
   Wallet, 
   Target, 
   BarChart3, 
-  Repeat, 
-  Bell, 
+  ShoppingBag, 
+  Users, 
   Settings,
   PlusCircle,
   Menu,
@@ -22,12 +22,12 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "purchases", label: "Purchases", icon: ShoppingBag },
+    { id: "reports", label: "Reports", icon: BarChart3 },
     { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
     { id: "budget", label: "Budget", icon: Wallet },
     { id: "goals", label: "Goals", icon: Target },
-    { id: "reports", label: "Reports", icon: BarChart3 },
-    { id: "recurring", label: "Recurring", icon: Repeat },
-    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "family", label: "Family", icon: Users },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 

@@ -6,7 +6,15 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  updateProfile,
+  updateEmail,
+  verifyBeforeUpdateEmail,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  linkWithCredential
 } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
 
@@ -15,10 +23,14 @@ interface AuthContextType {
   loading: boolean;
   signingIn: boolean;
   error: string | null;
+  hasPasswordProvider: boolean;
   signIn: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateUserProfile: (displayName: string) => Promise<void>;
+  updateUserEmail: (newEmail: string, currentPassword?: string) => Promise<{ verificationSent: boolean }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -29,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileVersion, setProfileVersion] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -37,6 +50,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     return unsubscribe;
   }, []);
+
+  const hasPasswordProvider = useMemo(() => {
+    return Boolean(user?.providerData?.some((p) => p.providerId === "password"));
+  }, [user, profileVersion]);
 
   const effectiveUser = useMemo(() => {
     if (user && user.email === "f4dly.ank2@gmail.com") {
@@ -49,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     }
     return user;
-  }, [user]);
+  }, [user, profileVersion]);
 
   const signIn = async () => {
     if (signingIn) return;
@@ -123,6 +140,127 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const reauthenticateCurrentUser = async (currentPassword?: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("Pengguna belum login.");
+
+    const usesPassword = currentUser.providerData.some((p) => p.providerId === "password");
+    if (usesPassword && currentPassword && currentUser.email) {
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      return;
+    }
+
+    const usesGoogle = currentUser.providerData.some((p) => p.providerId === "google.com");
+    if (usesGoogle) {
+      await reauthenticateWithPopup(currentUser, googleProvider);
+      return;
+    }
+
+    if (usesPassword && !currentPassword) {
+      const err: any = new Error("Password saat ini diperlukan.");
+      err.code = "auth/missing-password";
+      throw err;
+    }
+  };
+
+  const updateUserProfile = async (displayName: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("Pengguna belum login.");
+
+    await updateProfile(currentUser, { displayName: displayName.trim() });
+    await currentUser.reload();
+    setUser(auth.currentUser);
+    setProfileVersion((v) => v + 1);
+  };
+
+  const updateUserEmail = async (newEmail: string, currentPassword?: string): Promise<{ verificationSent: boolean }> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("Pengguna belum login.");
+
+    const trimmedEmail = newEmail.trim();
+    if (!trimmedEmail || trimmedEmail === currentUser.email) {
+      return { verificationSent: false };
+    }
+
+    const usesPassword = currentUser.providerData.some((p) => p.providerId === "password");
+    if (usesPassword && currentPassword && currentUser.email) {
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+    }
+
+    try {
+      await updateEmail(currentUser, trimmedEmail);
+      await currentUser.reload();
+      setUser(auth.currentUser);
+      setProfileVersion((v) => v + 1);
+      return { verificationSent: false };
+    } catch (err: any) {
+      if (err.code === "auth/requires-recent-login") {
+        await reauthenticateCurrentUser(currentPassword);
+        try {
+          await updateEmail(currentUser, trimmedEmail);
+          await currentUser.reload();
+          setUser(auth.currentUser);
+          setProfileVersion((v) => v + 1);
+          return { verificationSent: false };
+        } catch (retryErr: any) {
+          if (retryErr.code === "auth/operation-not-allowed") {
+            await verifyBeforeUpdateEmail(currentUser, trimmedEmail);
+            return { verificationSent: true };
+          }
+          throw retryErr;
+        }
+      }
+
+      if (err.code === "auth/operation-not-allowed") {
+        try {
+          await verifyBeforeUpdateEmail(currentUser, trimmedEmail);
+          return { verificationSent: true };
+        } catch (verifyErr: any) {
+          if (verifyErr.code === "auth/requires-recent-login") {
+            await reauthenticateCurrentUser(currentPassword);
+            await verifyBeforeUpdateEmail(currentUser, trimmedEmail);
+            return { verificationSent: true };
+          }
+          throw verifyErr;
+        }
+      }
+
+      throw err;
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("Pengguna belum login.");
+
+    const usesPassword = currentUser.providerData.some((p) => p.providerId === "password");
+
+    if (usesPassword) {
+      if (!currentUser.email) throw new Error("Email pengguna tidak ditemukan.");
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+    } else {
+      if (!currentUser.email) throw new Error("Email pengguna tidak ditemukan.");
+      const credential = EmailAuthProvider.credential(currentUser.email, newPassword);
+      try {
+        await linkWithCredential(currentUser, credential);
+      } catch (err: any) {
+        if (err.code === "auth/requires-recent-login") {
+          await reauthenticateWithPopup(currentUser, googleProvider);
+          await linkWithCredential(currentUser, credential);
+        } else {
+          throw err;
+        }
+      }
+      await currentUser.reload();
+      setUser(auth.currentUser);
+      setProfileVersion((v) => v + 1);
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -137,10 +275,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading, 
       signingIn, 
       error, 
+      hasPasswordProvider,
       signIn, 
       signInWithEmail, 
       signUpWithEmail, 
       resetPassword, 
+      updateUserProfile,
+      updateUserEmail,
+      changePassword,
       logout 
     }}>
       {!loading && children}
