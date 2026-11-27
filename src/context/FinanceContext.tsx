@@ -27,6 +27,7 @@ import {
   deleteDoc, 
   doc, 
   getDoc,
+  getDocs,
   setDoc, 
   orderBy, 
   writeBatch,
@@ -245,11 +246,46 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setFamilyLink(snapshot.data() as UserFamilyLink);
         } else {
           setFamilyLink(null);
-          setFamily(null);
         }
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, `userFamilyLinks/${user.uid}`);
+      }
+    );
+
+    // Authoritative real-time family discovery by membership UID (self-heals missing userFamilyLinks)
+    const qFamilies = query(
+      collection(db, "families"),
+      where("memberUids", "array-contains", user.uid)
+    );
+    const unsubFamiliesQuery = onSnapshot(
+      qFamilies,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const matchedDoc = snapshot.docs[0];
+          const famData = { ...matchedDoc.data(), id: matchedDoc.id } as FamilyGroup;
+          setFamily(famData);
+          const myMember = famData.members?.find((m) => m.userId === user.uid);
+          const myRole = myMember?.role || "Wife";
+          setFamilyLink((prev) => {
+            if (!prev || prev.familyId !== famData.id || prev.role !== myRole) {
+              const repairedLink: UserFamilyLink = {
+                userId: user.uid,
+                familyId: famData.id,
+                role: myRole,
+                updatedAt: new Date().toISOString(),
+              };
+              setDoc(doc(db, "userFamilyLinks", user.uid), repairedLink).catch(() => {});
+              return repairedLink;
+            }
+            return prev;
+          });
+        } else {
+          setFamily(null);
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, "families");
       }
     );
 
@@ -301,15 +337,15 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       unsubCategories();
       unsubSettings();
       unsubFamilyLink();
+      unsubFamiliesQuery();
       unsubPendingInvites();
       unsubSentInvites();
     };
   }, [user]);
 
-  // Subscribe to the linked Family document
+  // Keep stale userFamilyLinks cleaned up if user is no longer in that family
   useEffect(() => {
     if (!user || !familyLink?.familyId) {
-      setFamily(null);
       return;
     }
 
@@ -319,7 +355,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (snapshot.exists()) {
           const data = { ...snapshot.data(), id: snapshot.id } as FamilyGroup;
           if (!data.memberUids?.includes(user.uid)) {
-            // User was removed from this family — clean up local link
             deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
             setFamily(null);
             setFamilyLink(null);
@@ -333,11 +368,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       },
       (error: any) => {
-        // Permission denied or deleted if removed from family — clear stale family link
-        setFamily(null);
         if (error?.code === "permission-denied") {
           deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
           setFamilyLink(null);
+          setFamily((prev) => (prev?.id === familyLink.familyId ? null : prev));
         }
       }
     );
@@ -426,11 +460,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Sync current user's transactions into family memberReports so linked family members can view reports
   useEffect(() => {
-    if (!user || !familyLink?.familyId || !family || family.id !== familyLink.familyId) return;
-    if (!family.memberUids.includes(user.uid)) return;
+    if (!user || !family?.id || !family.memberUids?.includes(user.uid)) return;
 
     const memberEntry = family.members.find((m) => m.userId === user.uid);
-    const activeRole = memberEntry?.role || familyLink.role;
+    const activeRole = memberEntry?.role || familyLink?.role || "Wife";
     const activeName = (settings.name || user.displayName || "User").trim().slice(0, 80);
     const compactTx = buildCompactTransactions(transactions);
 
@@ -811,12 +844,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await updateAppPreferences({ theme });
   };
 
-  const updateProfileSettings = async (updates: Partial<Pick<UserSettings, "name" | "email">>) => {
+  const updateProfileSettings = async (updates: Partial<Pick<UserSettings, "name" | "email" | "avatarUrl">>) => {
     if (!user) return;
     try {
+      const nextSettings = { ...settings, ...updates };
+      setSettings(nextSettings);
       await setDoc(
         doc(db, "settings", user.uid),
-        { ...settings, ...updates, userId: user.uid },
+        { ...nextSettings, userId: user.uid },
         { merge: true }
       );
     } catch (err) {
@@ -992,23 +1027,20 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const ensureNotActivelyInAnotherFamily = async () => {
-    if (!user || !familyLink?.familyId) return;
+    if (!user) return;
     try {
-      const existingFamSnap = await getDoc(doc(db, "families", familyLink.familyId));
-      if (existingFamSnap.exists()) {
-        const existingFamData = existingFamSnap.data() as FamilyGroup;
-        if (existingFamData.memberUids?.includes(user.uid)) {
-          throw new Error("Akun Anda sudah terhubung dengan keluarga lain. Keluar terlebih dahulu jika ingin berpindah.");
-        }
+      const activeFamiliesSnap = await getDocs(
+        query(collection(db, "families"), where("memberUids", "array-contains", user.uid))
+      );
+      if (!activeFamiliesSnap.empty) {
+        throw new Error("Akun Anda sudah terhubung dengan keluarga lain. Lepas tautan terlebih dahulu jika ingin berpindah.");
       }
-      await deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
-      setFamilyLink(null);
-      setFamily(null);
     } catch (err: any) {
       if (err?.message?.includes("sudah terhubung dengan keluarga lain")) {
         throw err;
       }
-      // Permission denied / not found means stale link from a removed/deleted family
+    }
+    if (familyLink?.familyId) {
       await deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
       setFamilyLink(null);
       setFamily(null);

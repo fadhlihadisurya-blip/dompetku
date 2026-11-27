@@ -12,13 +12,15 @@ import {
   Mail,
   KeyRound,
   BarChart3,
-  LogOut,
   Trash2,
   CheckCircle2,
   AlertCircle,
   ShieldCheck,
   Clock,
   X,
+  ShoppingBag,
+  Unlink,
+  ArrowRight,
 } from "lucide-react";
 import { ConfirmModal } from "../components/ConfirmModal";
 
@@ -38,7 +40,7 @@ const FamilyPage: React.FC<FamilyPageProps> = ({ setActiveTab, onOpenRoleReport 
   const { user } = useAuth();
   const {
     family,
-    familyLink,
+    purchases,
     pendingFamilyInvites,
     sentFamilyInvites,
     createFamily,
@@ -197,15 +199,18 @@ const FamilyPage: React.FC<FamilyPageProps> = ({ setActiveTab, onOpenRoleReport 
       setIsSubmitting(true);
       await leaveFamily();
       setIsLeaveModalOpen(false);
-      showSuccess("Anda telah keluar dari keluarga.");
+      showSuccess("Tautan akun dengan keluarga berhasil dilepas.");
     } catch (err: any) {
-      showError(err?.message || "Gagal keluar dari keluarga.");
+      showError(err?.message || "Gagal melepas tautan keluarga.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const isOwner = Boolean(family && user && family.ownerId === user.uid);
+  const myMemberProfile = family?.members.find((m) => m.userId === user?.uid);
+  const otherMembers = family?.members.filter((m) => m.userId !== user?.uid) || [];
+  const pendingPurchasesCount = purchases.filter((p) => !p.isPurchased).length;
 
   return (
     <Layout activeTab="family" setActiveTab={setActiveTab} title="Family">
@@ -404,49 +409,125 @@ const FamilyPage: React.FC<FamilyPageProps> = ({ setActiveTab, onOpenRoleReport 
           /* Linked Family Dashboard */
           <div className="space-y-6">
             {/* Family Header Summary Card */}
-            <div className="bento-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-3xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                  <Users className="w-7 h-7" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white">{family.name}</h3>
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-                      {family.members.length} Anggota Terhubung
-                    </span>
+            <div className="bento-card p-6 space-y-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-3xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                    <Users className="w-7 h-7" />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Semua anggota dalam keluarga dapat melihat Reports & Analytics satu sama lain berdasarkan role.
-                  </p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white">{family.name}</h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                        Bertautan • {family.members.length} Anggota
+                      </span>
+                      {myMemberProfile && (
+                        <span
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-bold",
+                            ROLE_BADGE_STYLES[myMemberProfile.role]
+                          )}
+                        >
+                          Role Anda: {myMemberProfile.role}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      {otherMembers.length > 0 ? (
+                        <>
+                          Bertautan dengan{" "}
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {otherMembers.map((m) => `${m.name} (${m.role})`).join(", ")}
+                          </span>
+                          .
+                        </>
+                      ) : (
+                        "Belum ada anggota lain yang bertautan. Bagikan kode undangan atau undang via email."
+                      )}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Daftar belanja pada menu Purchases dan laporan transaksi pada menu Reports kini tersinkronisasi untuk keluarga ini.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-3.5 py-2">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Kode Undangan</p>
+                      <p className="text-sm font-black tracking-wider text-indigo-600 dark:text-indigo-400">
+                        {family.inviteCode}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyCode}
+                      className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors cursor-pointer"
+                      title="Salin kode undangan"
+                    >
+                      {copiedCode ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsLeaveModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <Unlink className="w-4 h-4" />
+                    <span>Lepas Tautan</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl px-3.5 py-2">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Kode Undangan</p>
-                    <p className="text-sm font-black tracking-wider text-indigo-600 dark:text-indigo-400">
-                      {family.inviteCode}
-                    </p>
+              {/* Connected Family Features: Purchases & Reports */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("purchases")}
+                  className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/30 border border-slate-200/80 dark:border-slate-800 text-left transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                      <ShoppingBag className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">Menu Purchases Bersama</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {pendingPurchasesCount > 0
+                          ? `${pendingPurchasesCount} barang akan dibeli bersama keluarga`
+                          : `${purchases.length} item daftar belanja keluarga`}
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyCode}
-                    className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors cursor-pointer"
-                    title="Salin kode undangan"
-                  >
-                    {copiedCode ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0 transition-colors" />
+                </button>
 
                 <button
                   type="button"
-                  onClick={() => setIsLeaveModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-xs font-bold transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (otherMembers.length > 0 && onOpenRoleReport) {
+                      onOpenRoleReport(otherMembers[0].role);
+                    } else {
+                      setActiveTab("reports");
+                    }
+                  }}
+                  className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/30 border border-slate-200/80 dark:border-slate-800 text-left transition-colors cursor-pointer group"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span>Keluar</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">Menu Reports Keluarga</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {otherMembers.length > 0
+                          ? `Lihat laporan ${otherMembers.map((m) => m.role).join(", ")}`
+                          : "Pantau laporan keuangan akun keluarga"}
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 shrink-0 transition-colors" />
                 </button>
               </div>
             </div>
@@ -625,9 +706,13 @@ const FamilyPage: React.FC<FamilyPageProps> = ({ setActiveTab, onOpenRoleReport 
         isOpen={isLeaveModalOpen}
         onClose={() => setIsLeaveModalOpen(false)}
         onConfirm={handleConfirmLeaveFamily}
-        title="Keluar dari Keluarga"
-        message="Apakah Anda yakin ingin keluar dari keluarga ini? Anda tidak lagi dapat melihat laporan anggota keluarga lain."
-        confirmText="Keluar"
+        title="Lepas Tautan Keluarga"
+        message={
+          family
+            ? `Apakah Anda yakin ingin melepas tautan akun Anda dari keluarga "${family.name}"? Anda dapat menautkan kembali akun ini kapan saja.`
+            : "Apakah Anda yakin ingin melepas tautan akun Anda dari keluarga ini?"
+        }
+        confirmText="Lepas Tautan"
         cancelText="Batal"
         type="danger"
         isLoading={isSubmitting}

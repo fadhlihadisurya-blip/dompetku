@@ -145,7 +145,7 @@ service cloud.firestore {
 
     match /families/{familyId} {
       allow get: if isValidId(familyId) && isUidInList(resource.data.memberUids);
-      allow list: if false;
+      allow list: if isSignedIn() && isUidInList(resource.data.memberUids);
       allow create: if isValidId(familyId) &&
         isOwner(request.resource.data.ownerId) &&
         isValidFamily(request.resource.data) &&

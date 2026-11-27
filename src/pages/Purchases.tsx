@@ -42,6 +42,8 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
   const [editName, setEditName] = useState("");
   const [deletingItem, setDeletingItem] = useState<PurchaseItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmingPurchaseItem, setConfirmingPurchaseItem] = useState<PurchaseItem | null>(null);
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   const counts = useMemo(() => {
     const pendingCount = purchases.filter((p) => !p.isPurchased).length;
@@ -116,6 +118,19 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
       console.error("Gagal menghapus barang:", err);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleConfirmPurchase = async () => {
+    if (!confirmingPurchaseItem) return;
+    try {
+      setIsPurchasing(true);
+      await togglePurchaseStatus(confirmingPurchaseItem);
+      setConfirmingPurchaseItem(null);
+    } catch (err) {
+      console.error("Gagal mengubah status pembelian:", err);
+    } finally {
+      setIsPurchasing(false);
     }
   };
 
@@ -237,41 +252,41 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
         </div>
 
         {/* Purchases List */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           {filteredPurchases.length > 0 ? (
             filteredPurchases.map((item) => (
               <div
                 key={item.id}
                 className={cn(
-                  "bento-card p-4 sm:p-5 transition-all border",
+                  "bento-card p-3 sm:p-3.5 transition-all border",
                   item.isPurchased
                     ? "bg-slate-50/70 dark:bg-slate-900/50 border-emerald-200/70 dark:border-emerald-900/40"
                     : "border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-800"
                 )}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* Left: Icon & Item Name */}
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
                       className={cn(
-                        "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0",
+                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
                         item.isPurchased
                           ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400"
                           : "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
                       )}
                     >
                       {item.isPurchased ? (
-                        <CheckCircle2 className="w-5 h-5" />
+                        <CheckCircle2 className="w-4 h-4" />
                       ) : (
-                        <Package className="w-5 h-5" />
+                        <Package className="w-4 h-4" />
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1 space-y-1">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <h4
                           className={cn(
-                            "text-base font-bold break-words",
+                            "text-sm font-bold break-words",
                             item.isPurchased
                               ? "line-through text-slate-500 dark:text-slate-400"
                               : "text-slate-900 dark:text-white"
@@ -286,7 +301,7 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {item.isPurchased && item.purchasedAt
@@ -309,23 +324,24 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
                   </div>
 
                   {/* Right: Actions */}
-                  <div className="flex flex-wrap items-center gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
+                  <div className="flex items-center gap-1.5 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
                     {!item.isPurchased ? (
                       <button
-                        onClick={() => togglePurchaseStatus(item)}
-                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-2 px-3.5 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                        onClick={() => setConfirmingPurchaseItem(item)}
+                        className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm transition-all cursor-pointer"
+                        title="Sudah Beli"
+                        aria-label={`Sudah beli ${item.name}`}
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>Sudah Beli</span>
                       </button>
                     ) : (
                       <button
                         onClick={() => togglePurchaseStatus(item)}
-                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer"
-                        title="Kembalikan ke daftar Akan Dibeli"
+                        className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all cursor-pointer"
+                        title="Batal Beli"
+                        aria-label={`Batal beli ${item.name}`}
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>Batal Beli</span>
+                        <RotateCcw className="w-4 h-4" />
                       </button>
                     )}
 
@@ -404,6 +420,19 @@ const PurchasesPage: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setA
           </button>
         </form>
       </Modal>
+
+      {/* Confirm Purchase Modal */}
+      <ConfirmModal
+        isOpen={!!confirmingPurchaseItem}
+        onClose={() => setConfirmingPurchaseItem(null)}
+        onConfirm={handleConfirmPurchase}
+        title="Konfirmasi Pembelian"
+        message="Barang sudah dibeli ?"
+        confirmText="Ya, Sudah Dibeli"
+        cancelText="Batal"
+        type="success"
+        isLoading={isPurchasing}
+      />
 
       {/* Confirm Delete Modal */}
       <ConfirmModal

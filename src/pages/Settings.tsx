@@ -574,11 +574,7 @@ const Settings: React.FC<{ setActiveTab: (tab: string) => void }> = ({ setActive
           ))}
         </div>
 
-        {/* About App */}
-        <div className="text-center py-8">
-          <p className="text-xs text-slate-400 font-medium">Dompet Disiplin v1.0.0 Build 2026</p>
-          <p className="text-[10px] text-slate-500 mt-1">Dibuat dengan ❤️ untuk masa depan finansial Anda</p>
-        </div>
+
       </div>
 
       {/* Modal Edit Nama Lengkap */}

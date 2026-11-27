@@ -78,6 +78,7 @@ export interface UserSettings {
   theme: "light" | "dark";
   notifications: boolean;
   dateFormat: string;
+  avatarUrl?: string;
 }
 
 export type FinancialInsight = {

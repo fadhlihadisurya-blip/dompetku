@@ -2,7 +2,7 @@ import React from "react";
 import { Sidebar } from "./Sidebar";
 import { MobileNav } from "./MobileNav";
 import { motion, AnimatePresence } from "motion/react";
-import { Users, Search, User } from "lucide-react";
+import { Users, Settings, User } from "lucide-react";
 import { useFinance } from "../context/FinanceContext";
 import { PWAInstallButton } from "./PWAInstallButton";
 
@@ -14,7 +14,31 @@ interface LayoutProps {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, title }) => {
-  const { settings, pendingFamilyInvites } = useFinance();
+  const { settings, pendingFamilyInvites, updateProfileSettings } = useFinance();
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Ukuran file maksimal 3MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        await updateProfileSettings({ avatarUrl: base64 });
+      } catch (err) {
+        console.error("Gagal mengunggah foto profil:", err);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -29,9 +53,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
 
           <div className="flex items-center gap-4">
             <PWAInstallButton />
-            <button className="p-2 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-900 rounded-xl transition-colors hidden md:flex">
-              <Search className="w-5 h-5" />
-            </button>
             <button 
               onClick={() => setActiveTab("family")}
               title="Family"
@@ -48,9 +69,28 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
                 <p className="text-sm font-medium text-slate-900 dark:text-white">{settings.name}</p>
                 <p className="text-[10px] text-slate-500 dark:text-slate-400">Personal Account</p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <User className="w-5 h-5" />
-              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="hidden"
+              />
+              <button 
+                onClick={handleAvatarClick}
+                title="Unggah Foto Profil dari Galeri"
+                aria-label="Unggah Foto Profil dari Galeri"
+                className="w-10 h-10 rounded-xl overflow-hidden bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400 hover:opacity-90 transition-opacity cursor-pointer shadow-sm border border-indigo-200/50 dark:border-indigo-800/50 relative group"
+              >
+                {settings.avatarUrl ? (
+                  <img src={settings.avatarUrl} alt={settings.name} className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px] font-bold">
+                  Edit
+                </div>
+              </button>
             </div>
           </div>
         </header>
@@ -68,6 +108,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
             </motion.div>
           </AnimatePresence>
         </div>
+
+        <footer className="py-8 px-6 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 border-t border-slate-200/60 dark:border-slate-800/60 mt-12">
+          <p className="font-semibold">copyright © FHS Dompet Disiplin V.3.15 2026</p>
+          <p>Dibuat dengan ❤️ untuk masa depan finansial Anda</p>
+        </footer>
       </main>
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
