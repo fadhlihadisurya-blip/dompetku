@@ -332,9 +332,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setFamilyLink(null);
         }
       },
-      () => {
-        // Permission denied or deleted if removed from family
+      (error: any) => {
+        // Permission denied or deleted if removed from family — clear stale family link
         setFamily(null);
+        if (error?.code === "permission-denied") {
+          deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
+          setFamilyLink(null);
+        }
       }
     );
 
@@ -987,9 +991,33 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return `FAM${suffix}`;
   };
 
+  const ensureNotActivelyInAnotherFamily = async () => {
+    if (!user || !familyLink?.familyId) return;
+    try {
+      const existingFamSnap = await getDoc(doc(db, "families", familyLink.familyId));
+      if (existingFamSnap.exists()) {
+        const existingFamData = existingFamSnap.data() as FamilyGroup;
+        if (existingFamData.memberUids?.includes(user.uid)) {
+          throw new Error("Akun Anda sudah terhubung dengan keluarga lain. Keluar terlebih dahulu jika ingin berpindah.");
+        }
+      }
+      await deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
+      setFamilyLink(null);
+      setFamily(null);
+    } catch (err: any) {
+      if (err?.message?.includes("sudah terhubung dengan keluarga lain")) {
+        throw err;
+      }
+      // Permission denied / not found means stale link from a removed/deleted family
+      await deleteDoc(doc(db, "userFamilyLinks", user.uid)).catch(() => {});
+      setFamilyLink(null);
+      setFamily(null);
+    }
+  };
+
   const createFamily = async (familyName: string, role: FamilyRole) => {
     if (!user) throw new Error("Anda harus login terlebih dahulu.");
-    if (familyLink) throw new Error("Akun Anda sudah terhubung dengan keluarga.");
+    await ensureNotActivelyInAnotherFamily();
 
     const trimmedName = familyName.trim().slice(0, 80);
     if (!trimmedName) throw new Error("Nama keluarga tidak boleh kosong.");
@@ -1041,6 +1069,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: nowIso,
       });
       await batch.commit();
+      lastReportSyncRef.current = "";
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, "families");
       throw err;
@@ -1049,7 +1078,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const joinFamilyByIdInternal = async (familyId: string, role: FamilyRole, inviteIdToAccept?: string) => {
     if (!user) throw new Error("Anda harus login terlebih dahulu.");
-    if (familyLink) throw new Error("Akun Anda sudah terhubung dengan keluarga lain. Keluar terlebih dahulu jika ingin berpindah.");
+    await ensureNotActivelyInAnotherFamily();
 
     const nowIso = new Date().toISOString();
     const memberName = (settings.name || user.displayName || "User").trim().slice(0, 80);
@@ -1224,6 +1253,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const remainingUids = family.memberUids.filter((id) => id !== memberUid);
 
     try {
+      const linkRef = doc(db, "userFamilyLinks", memberUid);
+      const linkSnap = await getDoc(linkRef).catch(() => null);
+
       const batch = writeBatch(db);
       batch.update(doc(db, "families", family.id), {
         members: remainingMembers,
@@ -1231,6 +1263,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updatedAt: nowIso,
       });
       batch.delete(doc(db, "families", family.id, "memberReports", memberUid));
+      if (linkSnap?.exists() && linkSnap.data()?.familyId === family.id) {
+        batch.delete(linkRef);
+      }
       await batch.commit();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `families/${family.id}`);

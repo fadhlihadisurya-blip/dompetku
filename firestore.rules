@@ -113,10 +113,22 @@ service cloud.firestore {
     }
 
     match /userFamilyLinks/{userId} {
-      allow get: if isValidId(userId) && isOwner(userId);
+      allow get: if isValidId(userId) && (
+        isOwner(userId) ||
+        (resource != null &&
+          resource.data.familyId is string &&
+          exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+          isOwner(get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.ownerId))
+      );
       allow list: if false;
       allow create, update: if isValidId(userId) && isOwner(userId) && isValidUserFamilyLink(request.resource.data, userId);
-      allow delete: if isValidId(userId) && isOwner(userId);
+      allow delete: if isValidId(userId) && (
+        isOwner(userId) ||
+        (resource != null &&
+          resource.data.familyId is string &&
+          exists(/databases/$(database)/documents/families/$(resource.data.familyId)) &&
+          isOwner(get(/databases/$(database)/documents/families/$(resource.data.familyId)).data.ownerId))
+      );
     }
 
     function isValidFamily(data) {
@@ -179,10 +191,10 @@ service cloud.firestore {
           isValidMemberReport(request.resource.data, familyId, memberId) &&
           (isMemberOfFamilyPath(familyId) || isMemberAfterFamilyPath(familyId));
         allow update: if isValidId(familyId) && isValidId(memberId) &&
-          isValidMemberReport(request.resource.data, familyId, memberId) &&
-          isMemberOfFamilyPath(familyId) && (
-            isOwner(memberId) ||
-            (exists(/databases/$(database)/documents/families/$(familyId)) &&
+          isValidMemberReport(request.resource.data, familyId, memberId) && (
+            (isOwner(memberId) && (isMemberOfFamilyPath(familyId) || isMemberAfterFamilyPath(familyId))) ||
+            (isMemberOfFamilyPath(familyId) &&
+              exists(/databases/$(database)/documents/families/$(familyId)) &&
               isOwner(get(/databases/$(database)/documents/families/$(familyId)).data.ownerId) &&
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'updatedAt']))
           );

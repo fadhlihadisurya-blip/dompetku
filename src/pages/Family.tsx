@@ -277,7 +277,7 @@ const FamilyPage: React.FC<FamilyPageProps> = ({ setActiveTab, onOpenRoleReport 
                       </select>
                       <button
                         type="button"
-                        disabled={isSubmitting || Boolean(familyLink)}
+                        disabled={isSubmitting || Boolean(family)}
                         onClick={() => handleAcceptInvite(inv)}
                         className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
                       >
